@@ -37,7 +37,7 @@ def post_article(title, html, media_id):
         "status": "publish",
         "categories": [CATEGORY_ID],
         "tags": TAG_IDS,
-        "featured_media": media_id
+        # "featured_media": media_id コメントアウト検証中
     }
     res = requests.post(f"{WP_URL}/wp-json/wp/v2/posts", headers=headers, json=payload)
     if res.status_code not in (200, 201):
