@@ -1,0 +1,44 @@
+name: NewsIF AutoPost (Main)
+
+on:
+  schedule:
+    - cron: '0 23 * * 0,2,4'  # JST 08:00 → UTC 23:00（日火木）
+  workflow_dispatch: {}
+
+jobs:
+  autopost:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      WP_URL: ${{ secrets.WP_URL }}
+      WP_USER: ${{ secrets.WP_USER }}
+      WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          pip install openai requests feedparser pillow python-dateutil markdown-it-py
+
+      - name: Fetch latest news
+        run: python scripts/fetch_news.py
+
+      - name: Generate article
+        run: python scripts/gen_article_news.py
+
+      - name: Generate image
+        run: python scripts/gen_image.py
+
+      - name: Commit markdown
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add posts/news/main/*.md
+          git commit -m "auto: NewsIF main article" || echo "nothing to commit"
+          git push
+
+      - name: Post to WordPress
+        run: python scripts/post_to_wp.py
