@@ -3,36 +3,29 @@ import os
 import glob
 import base64
 import markdown
+import random
 
-# 環境変数から取得
+# WP接続情報（GitHub Secrets または .env）
 WP_URL = os.getenv("WP_URL")  # 例: https://studyriver.jp
-WP_USER = os.getenv("WP_USER")  # 例: sasasasasasaki
-WP_APP_PASS = os.getenv("WP_APP_PASS")  # アプリケーションパスワード
+WP_USER = os.getenv("WP_USER")
+WP_APP_PASS = os.getenv("WP_APP_PASS")
 
-# 設定パス
+# 投稿対象のMarkdownフォルダ
 POST_DIR = "posts/news/main/"
-IMAGE_PATH = "tmp/thumbnail.webp"
 
-# カテゴリ・タグ
+# カテゴリとタグ（WordPress側で確認してIDを指定）
 CATEGORY_ID = 627
 TAG_IDS = [586]
+
+# ランダムで使いまわす画像（WPのメディアID）
+MEDIA_IDS = [
+    1075, 1076, 1077, 1078, 1079,
+    1080, 1081, 1082, 1083, 1084
+]
 
 def get_auth():
     auth_str = f"{WP_USER}:{WP_APP_PASS}"
     return base64.b64encode(auth_str.encode()).decode()
-
-def upload_media(img_path):
-    with open(img_path, "rb") as img:
-        headers = {
-            "Authorization": f"Basic {get_auth()}",
-            "Content-Disposition": "attachment; filename=thumbnail.webp",
-            "Content-Type": "image/webp"
-        }
-        res = requests.post(f"{WP_URL}/wp-json/wp/v2/media", headers=headers, data=img.read())
-        if res.status_code != 201:
-            print("❌ Upload failed:", res.status_code, res.text)
-            raise Exception("画像アップロードに失敗しました")
-        return res.json()["id"]
 
 def post_article(title, html, media_id):
     headers = {
@@ -64,7 +57,8 @@ def main():
         md = f.read()
     html = markdown.markdown(md)
     title = md.splitlines()[0].replace("#", "").strip()
-    media_id = upload_media(IMAGE_PATH)
+
+    media_id = random.choice(MEDIA_IDS)
     post_article(title, html, media_id)
 
 if __name__ == "__main__":
