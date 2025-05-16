@@ -1,12 +1,12 @@
 # scripts/gen_article_news.py
 
-import openai
+from openai import OpenAI
 import os
 import json
 from datetime import datetime
 import re
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 INPUT_FILE = "tmp/news.json"
 OUTPUT_DIR = "posts/news/main/"
@@ -54,14 +54,14 @@ def build_prompt(news):
     }
 
 def generate_article(prompt):
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": prompt["system"]},
-            {"role": "user", "content": prompt["user"]},
+            {"role": "system", "content": "You are a news analysis assistant..."},
+            {"role": "user", "content": prompt}
         ],
         temperature=0.7,
-        max_tokens=1200,
+        max_tokens=1200
     )
     return response.choices[0].message.content
 
