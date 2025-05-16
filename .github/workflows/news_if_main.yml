@@ -21,7 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install openai requests feedparser pillow python-dateutil markdown-it-py
+          pip install openai requests feedparser pillow python-dateutil markdown-it-py markdown
 
       - name: Fetch latest news
         run: python scripts/fetch_news.py
