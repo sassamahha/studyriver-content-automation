@@ -6,16 +6,15 @@ import glob
 import base64
 import markdown
 
-WP_URL = os.getenv("WP_URL")  # 例: https://studyriver.jp
+WP_URL = os.getenv("WP_URL")  # https://studyriver.jp
 WP_USER = os.getenv("WP_USER")  # 管理者ユーザー名
 WP_APP_PASS = os.getenv("WP_APP_PASS")  # Application Password
 
 POST_DIR = "posts/news/main/"
 IMAGE_PATH = "tmp/thumbnail.png"
 
-CATEGORY_ID = 123  # ← あとで実際のIDに変更
-TAG_IDS = [456]    # ← タグIDも必要なら
-
+CATEGORY_ID = 627 
+TAG_IDS = [586]  
 def get_auth():
     auth_str = f"{WP_USER}:{WP_APP_PASS}"
     return base64.b64encode(auth_str.encode()).decode()
