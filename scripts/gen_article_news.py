@@ -88,6 +88,11 @@ def save_markdown(title, content):
 def main():
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         news = json.load(f)
+
+    if not news.get("articles"):
+        print("❌ ニュース記事が見つかりませんでした。")
+        return
+    
     messages = build_messages(news)
     article = generate_article(messages)
     title = news["articles"][0]["title"]
