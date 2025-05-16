@@ -2,7 +2,7 @@ name: NewsIF AutoPost (Main)
 
 on:
   schedule:
-    - cron: '0 23 * * 0,2,4'  # JST 08:00 → UTC 23:00（日火木）
+    - cron: '0 23 * * 0,2,4'  # JST 08:00 → UTC 23:00（月水金）
   workflow_dispatch: {}
 
 jobs:
@@ -29,8 +29,9 @@ jobs:
       - name: Generate article
         run: python scripts/gen_article_news.py
 
-      - name: Generate image
-        run: python scripts/gen_image.py
+      # 👇 不要になった画像生成は削除済み
+      # - name: Generate image
+      #   run: python scripts/gen_image.py
 
       - name: Commit markdown
         run: |
