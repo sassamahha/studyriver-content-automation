@@ -14,14 +14,12 @@ OUTPUT_DIR = "posts/news/main/"
 def sanitize_title(title):
     return re.sub(r"[^a-zA-Z0-9\-]", "-", title.lower()).strip("-")
 
-def build_prompt(news):
+def build_messages(news):
     title = news["articles"][0]["title"]
     url = news["articles"][0]["url"]
     desc = news["articles"][0]["description"]
 
-    return {
-        "system": "あなたは「StudyRiver（スタリバ）」の未来仮説メディア専門ライターです。...\n（← 先ほどのSYSTEMプロンプト）",
-        "user": f"""### ニュース要約
+    user_prompt = f"""### ニュース要約
 {title}
 {url}
 {desc}
@@ -29,18 +27,24 @@ def build_prompt(news):
 --- 出力フォーマット ---
 # {title}
 
-## 1. ニュース要約
-（150字以内で）
+## 1. ニュース要約（150字以内で）
 
-## 2. IF仮説
-※ 3つの仮説それぞれ、3階層で深掘り：
+## 2. IF仮説（3つ・各3階層で深掘り）
 
 ### ◉ IF1：〜？
 - レベル1（直接変化）：〜
 - レベル2（副次影響）：〜
 - レベル3（価値観変化）：〜
 
-...
+### ◉ IF2：〜？
+- レベル1（直接変化）：〜
+- レベル2（副次影響）：〜
+- レベル3（価値観変化）：〜
+
+### ◉ IF3：〜？
+- レベル1（直接変化）：〜
+- レベル2（副次影響）：〜
+- レベル3（価値観変化）：〜
 
 ## 3. ワーク
 > **あなたならどうする？**
@@ -51,15 +55,22 @@ def build_prompt(news):
 ## 4. まとめ
 「あなたなら、どんな未来を選びますか？」  
 コメントで教えてください。"""
-    }
 
-def generate_article(prompt):
+    return [
+        {
+            "role": "system",
+            "content": "あなたは『StudyRiver（スタリバ）』の未来仮説メディア専門ライターです。最新ニュースの背景にある未来の可能性を、読者が考えたくなる形で構造化してください。"
+        },
+        {
+            "role": "user",
+            "content": user_prompt
+        }
+    ]
+
+def generate_article(messages):
     response = client.chat.completions.create(
         model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a news analysis assistant..."},
-            {"role": "user", "content": prompt}
-        ],
+        messages=messages,
         temperature=0.7,
         max_tokens=1200
     )
@@ -77,8 +88,8 @@ def save_markdown(title, content):
 def main():
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         news = json.load(f)
-    prompt = build_prompt(news)
-    article = generate_article(prompt)
+    messages = build_messages(news)
+    article = generate_article(messages)
     title = news["articles"][0]["title"]
     save_markdown(title, article)
 
