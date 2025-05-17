@@ -62,3 +62,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+resp = requests.post(url, headers=headers, json=payload, auth=auth)
+
+print("DEBUG status", resp.status_code)
+print("DEBUG headers", resp.headers)
+print("DEBUG first 300 bytes", resp.text[:300])
