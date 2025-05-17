@@ -14,14 +14,14 @@ WP_APP_PASS = os.getenv("WP_APP_PASS_KIDS")
 POST_DIR = "posts/news/kids/"
 
 # カテゴリとタグ（WordPress側で確認してIDを指定）
-CATEGORY_ID = 629  # キッズカテゴリ（例）
-TAG_IDS = [588]    # 未来教育タグ（例）
+CATEGORY_ID = 3  # キッズカテゴリ（例）
+TAG_IDS = [4]    # 未来教育タグ（例）
 
 # ランダムで使いまわす画像（WPのメディアID）
-MEDIA_IDS = [1080, 1081, 1082]  # キッズ向けの画像を用意しておくこと
+MEDIA_IDS = [8, 16]  # キッズ向けの画像を追加していく
 
 def get_auth():
-    auth_str = f"{WP_USER}:{WP_APP_PASS}"
+    auth_str = f"{WP_USER}:{WP_APP_PASS_KIDS}"
     return base64.b64encode(auth_str.encode()).decode()
 
 def post_article(title, html, media_id):
@@ -30,7 +30,7 @@ def post_article(title, html, media_id):
         "Content-Type": "application/json"
     }
 
-    url = f"{WP_URL}/wp-json/wp/v2/posts"
+    url = f"{WP_URL_KIDS}/wp-json/wp/v2/posts"
     print("POST URL:", url)
 
     payload = {
