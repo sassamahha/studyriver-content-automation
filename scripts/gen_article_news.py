@@ -1,10 +1,8 @@
-# scripts/gen_article_news.py
-
-from openai import OpenAI
 import os
 import json
-from datetime import datetime
 import re
+from datetime import datetime
+from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -19,47 +17,44 @@ def build_messages(news):
     url = news["articles"][0]["url"]
     desc = news["articles"][0]["description"]
 
-    user_prompt = f"""### ニュース要約
-{title}
-{url}
-{desc}
+    user_prompt = f"""以下のニュースをもとに、未来仮説メディア『StudyRiver（スタリバ）』向けの“雑誌風読み物”記事を構成してください。
+
+【ニュース】
+タイトル: {title}
+URL: {url}
+概要: {desc}
 
 --- 出力フォーマット ---
-# {title}
+# （ニュースをもとにした、日本語の仮説的な問いかけタイトルにしてください）
 
-## 1. ニュース要約（150字以内で）
+## 1. ニュース要約
+→ 読者が状況をイメージできるように、丁寧で語りかけるような雑誌風の文体で要約してください。  
+→ 最後に「この出来事が未来にどうつながるか？」という問いかけのコメントを添えてください。  
+→ その下に「引用元：{url}」を明記してください。
 
-## 2. IF仮説（3つ・各3階層で深掘り）
+## 2. IF仮説（3つ）
+→ 各仮説は以下の形式で、物語を語るように展開してください。
 
-### ◉ IF1：〜？
-- レベル1（直接変化）：〜
-- レベル2（副次影響）：〜
-- レベル3（価値観変化）：〜
-
-### ◉ IF2：〜？
-- レベル1（直接変化）：〜
-- レベル2（副次影響）：〜
-- レベル3（価値観変化）：〜
-
-### ◉ IF3：〜？
-- レベル1（直接変化）：〜
-- レベル2（副次影響）：〜
-- レベル3（価値観変化）：〜
+【形式】
+◉ IF1：◯◯だったら？
+（1段落で自然につなぐ。）
+- 最初に直接的な変化
+- 次に波及的な変化
+- 最後に価値観の変化
+→ これらを自然な文体で1つの段落として語ってください。
 
 ## 3. ワーク
 > **あなたならどうする？**
-- A. ◯◯
-- B. ◯◯
-- C. ◯◯
+→ 読者に3つの選択肢を出して問いかけます。社会・テクノロジー・個人視点など、未来への関わり方の違いが出るように。
 
 ## 4. まとめ
-「あなたなら、どんな未来を選びますか？」  
-コメントで教えてください。"""
+→ コメントを促す雑誌風の締めくくり文を書いてください。  
+例：「あなたはどんな未来を思い描きましたか？コメント欄でぜひ教えてください。」"""
 
     return [
         {
             "role": "system",
-            "content": "あなたは『StudyRiver（スタリバ）』の未来仮説メディア専門ライターです。最新ニュースの背景にある未来の可能性を、読者が考えたくなる形で構造化してください。"
+            "content": "あなたは『StudyRiver（スタリバ）』の未来仮説メディアに記事を寄稿する、読者との会話を大切にする雑誌ライターです。専門的すぎず、親しみやすく、想像を引き出す文章を心がけてください。"
         },
         {
             "role": "user",
@@ -72,7 +67,7 @@ def generate_article(messages):
         model="gpt-4o",
         messages=messages,
         temperature=0.7,
-        max_tokens=1200
+        max_tokens=1500
     )
     return response.choices[0].message.content
 
