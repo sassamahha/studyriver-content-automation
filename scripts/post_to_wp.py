@@ -74,12 +74,14 @@ def update_featured_image(post_id, media_id):
         print("⚠️ アイキャッチ追加失敗:", res.text)
 
 def main():
-    files = sorted(glob.glob(f"{POST_DIR}/*.md"), reverse=True)
+    files = glob.glob(f"{POST_DIR}/*.md")
     if not files:
         print("❌ No articles to post.")
         return
 
-    latest = files[0]
+    # 最新の更新日時のファイルを取得
+    latest = max(files, key=os.path.getmtime)
+    
     with open(latest, "r", encoding="utf-8") as f:
         md = f.read()
     html = markdown.markdown(md)
