@@ -17,6 +17,8 @@ def build_messages(news):
     url = news["articles"][0]["url"]
     desc = news["articles"][0]["description"]
 
+    print("🟡 DEBUG: Promptビルド中 (タイトル):", title)
+    
     user_prompt = f"""以下のニュースをもとに、未来仮説メディア『StudyRiver（スタリバ）』向けの“雑誌風読み物”記事を構成してください。
 
 【ニュース】
