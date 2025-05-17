@@ -8,7 +8,6 @@ import random
 # WP接続情報（GitHub Secrets または .env）
 WP_URL = os.getenv("WP_URL_KIDS")  # 例: https://studyriver.jp/kids（末尾にスラッシュなし）
 WP_USER = os.getenv("WP_USER")
-WP_APP_PASS = os.getenv("WP_APP_PASS_KIDS")
 
 # 投稿対象のMarkdownフォルダ
 POST_DIR = "posts/news/kids/"
@@ -21,6 +20,8 @@ TAG_IDS = [4]    # 未来教育タグ（例）
 MEDIA_IDS = [8, 16]  # キッズ向けの画像を追加していく
 
 def get_auth():
+    # WP_APP_PASS_KIDS をここで読み込む
+    wp_app_pass_kids = os.getenv("WP_APP_PASS_KIDS")
     auth_str = f"{WP_USER}:{wp_app_pass_kids}"
     return base64.b64encode(auth_str.encode()).decode()
 
@@ -30,7 +31,7 @@ def post_article(title, html, media_id):
         "Content-Type": "application/json"
     }
 
-    url = f"{WP_URL_KIDS}/wp-json/wp/v2/posts"
+    url = f"{WP_URL}/wp-json/wp/v2/posts"
     print("POST URL:", url)
 
     payload = {
