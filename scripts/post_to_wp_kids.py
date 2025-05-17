@@ -20,7 +20,6 @@ TAG_IDS = [4]    # 未来教育タグ（例）
 MEDIA_IDS = [8, 16]  # キッズ向けの画像を追加していく
 
 def get_auth():
-    # WP_APP_PASS_KIDS をここで読み込む
     wp_app_pass_kids = os.getenv("WP_APP_PASS_KIDS")
     auth_str = f"{WP_USER}:{wp_app_pass_kids}"
     return base64.b64encode(auth_str.encode()).decode()
@@ -55,12 +54,12 @@ def post_article(title, html, media_id):
     print("✅ Posted:", res.status_code, res.json().get("link"))
 
 def main():
-    files = sorted(glob.glob(f"{POST_DIR}/*.md"), reverse=True)
+    files = glob.glob(f"{POST_DIR}/*.md")
     if not files:
         print("❌ No articles to post.")
         return
 
-    latest = files[0]
+    latest = max(files, key=os.path.getmtime)  # 最終更新日時が新しいファイル
     with open(latest, "r", encoding="utf-8") as f:
         md = f.read()
     html = markdown.markdown(md)
