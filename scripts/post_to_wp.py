@@ -40,6 +40,13 @@ def post_article(title, html, media_id):
         # "featured_media": media_id コメントアウト検証中
     }
     res = requests.post(f"{WP_URL}/wp-json/wp/v2/posts", headers=headers, json=payload)
+
+    # ---- デバッグ追加ここから ----
+    print("DEBUG status:", res.status_code)
+    print("DEBUG resp-len:", len(res.text))
+    print("DEBUG first 200:", res.text[:200])
+    # ---- デバッグ追加ここまで ----
+    
     if res.status_code not in (200, 201):
         print("❌ Post failed:", res.status_code, res.text)
         raise Exception("記事の投稿に失敗しました")
@@ -62,10 +69,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-resp = requests.post(url, headers=headers, json=payload, auth=auth)
-
-print("DEBUG status", resp.status_code)
-print("DEBUG headers", resp.headers)
-print("DEBUG first 300 bytes", resp.text[:300])
