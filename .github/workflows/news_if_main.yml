@@ -39,9 +39,8 @@ jobs:
           git config user.email "actions@github.com"
           git add posts/news/main/*.md
           git commit -m "auto: newsIF $(date -u '+%Y-%m-%d')" || echo "nothing to commit"
-
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git pull origin main --rebase --autostash || echo "rebase failed"
+          git push origin HEAD:main || echo "push failed"
 
       - name: Post to WordPress
         run: python scripts/post_to_wp.py
