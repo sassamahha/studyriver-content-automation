@@ -27,7 +27,7 @@ jobs:
         run: python scripts/fetch_news_kids.py
 
       - name: Generate kids article
-        run: python scripts/gen_article_kids.py
+        run: python scripts/gen_article_news_kids.py
 
       - name: Commit markdown
         run: |
