@@ -6,7 +6,7 @@ import markdown
 import random
 
 # WP接続情報（GitHub Secrets または .env）
-WP_URL = os.getenv("WP_URL")  # 例: https://studyriver.jp
+WP_URL = os.getenv("WP_URL")  # 例: https://studyriver.jp（末尾にスラッシュなし）
 WP_USER = os.getenv("WP_USER")
 WP_APP_PASS = os.getenv("WP_APP_PASS")
 
@@ -31,22 +31,26 @@ def post_article(title, html, media_id):
         "Authorization": f"Basic {get_auth()}",
         "Content-Type": "application/json"
     }
+
+    url = f"{WP_URL}/wp-json/wp/v2/posts"
+    print("POST URL:", url)  # ← 送信先確認ログ（デバッグ）
+
     payload = {
         "title": title,
         "content": html,
         "status": "publish",
         "categories": [CATEGORY_ID],
         "tags": TAG_IDS,
-        # "featured_media": media_id コメントアウト検証中
+        # "featured_media": media_id  # ← 一時的に除外中
     }
-    res = requests.post(f"{WP_URL}/wp-json/wp/v2/posts", headers=headers, json=payload)
 
-    # ---- デバッグ追加ここから ----
+    res = requests.post(url, headers=headers, json=payload)
+
+    # デバッグ出力
     print("DEBUG status:", res.status_code)
     print("DEBUG resp-len:", len(res.text))
     print("DEBUG first 200:", res.text[:200])
-    # ---- デバッグ追加ここまで ----
-    
+
     if res.status_code not in (200, 201):
         print("❌ Post failed:", res.status_code, res.text)
         raise Exception("記事の投稿に失敗しました")
