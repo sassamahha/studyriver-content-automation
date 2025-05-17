@@ -6,7 +6,7 @@ import markdown
 import random
 
 # WP接続情報（GitHub Secrets または .env）
-WP_URL = os.getenv("WP_URL")  # 例: https://studyriver.jp（末尾にスラッシュなし）
+WP_URL = os.getenv("WP_URL")  # 例: https://studyriver.jp（末尾スラッシュなし）
 WP_USER = os.getenv("WP_USER")
 WP_APP_PASS = os.getenv("WP_APP_PASS")
 
@@ -33,20 +33,18 @@ def post_article(title, html, media_id):
     }
 
     url = f"{WP_URL}/wp-json/wp/v2/posts"
-    print("POST URL:", url)  # ← 送信先確認ログ（デバッグ）
+    print("POST URL:", url)
 
     payload = {
         "title": title,
         "content": html,
         "status": "publish",
         "categories": [CATEGORY_ID],
-        "tags": TAG_IDS,
-        # "featured_media": media_id  # ← 一時的に除外中
+        "tags": TAG_IDS
     }
 
     res = requests.post(url, headers=headers, json=payload)
 
-    # デバッグ出力
     print("DEBUG status:", res.status_code)
     print("DEBUG resp-len:", len(res.text))
     print("DEBUG first 200:", res.text[:200])
@@ -54,7 +52,26 @@ def post_article(title, html, media_id):
     if res.status_code not in (200, 201):
         print("❌ Post failed:", res.status_code, res.text)
         raise Exception("記事の投稿に失敗しました")
+
+    post_id = res.json().get("id")
     print("✅ Posted:", res.status_code, res.json().get("link"))
+
+    # --- 投稿成功後にアイキャッチ画像を付与 ---
+    update_featured_image(post_id, media_id)
+
+def update_featured_image(post_id, media_id):
+    url = f"{WP_URL}/wp-json/wp/v2/posts/{post_id}"
+    headers = {
+        "Authorization": f"Basic {get_auth()}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {"featured_media": media_id}
+    res = requests.post(url, headers=headers, json=payload)
+
+    print("📷 アイキャッチ画像追加:", res.status_code)
+    if res.status_code not in (200, 201):
+        print("⚠️ アイキャッチ追加失敗:", res.text)
 
 def main():
     files = sorted(glob.glob(f"{POST_DIR}/*.md"), reverse=True)
