@@ -21,7 +21,7 @@ TAG_IDS = [4]    # 未来教育タグ（例）
 MEDIA_IDS = [8, 16]  # キッズ向けの画像を追加していく
 
 def get_auth():
-    auth_str = f"{WP_USER}:{WP_APP_PASS_KIDS}"
+    auth_str = f"{WP_USER}:{wp_app_pass_kids}"
     return base64.b64encode(auth_str.encode()).decode()
 
 def post_article(title, html, media_id):
