@@ -2,7 +2,7 @@ name: NewsIF AutoPost (Main)
 
 on:
   schedule:
-    - cron: '0 23 * * 0,2,4'  # JST 08:00 → UTC 23:00（月水金）
+    - cron: '45 9 * * *'  # JST 18:45（毎日）
   workflow_dispatch: {}
 
 jobs:
