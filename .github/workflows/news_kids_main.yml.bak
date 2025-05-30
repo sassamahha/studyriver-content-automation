@@ -1,8 +1,8 @@
-name: NewsIF AutoPost (Kids)
+name: NewsIF AutoPost (Main)
 
 on:
   schedule:
-    - cron: '0 23 * * 1,3'  # JST 08:00（火・木）
+    - cron: '0 23 * * 1,3'  # JST 08:00 → UTC 23:00（月曜・水曜）
   workflow_dispatch: {}
 
 jobs:
@@ -11,9 +11,9 @@ jobs:
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-      WP_URL_KIDS: ${{ secrets.WP_URL_KIDS }}
+      WP_URL: ${{ secrets.WP_URL }}
       WP_USER: ${{ secrets.WP_USER }}
-      WP_APP_PASS_KIDS: ${{ secrets.WP_APP_PASS_KIDS }}
+      WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
 
     steps:
       - name: Checkout repo
@@ -23,20 +23,24 @@ jobs:
         run: |
           pip install openai requests feedparser pillow python-dateutil markdown-it-py markdown
 
-      - name: Fetch latest kids news
-        run: python scripts/fetch_news_kids.py
+      - name: Fetch latest news
+        run: python scripts/fetch_news.py
 
-      - name: Generate kids article
-        run: python scripts/gen_article_news_kids.py
+      - name: Generate article
+        run: python scripts/gen_article_news.py
+
+      # 👇 不要になった画像生成は削除済み
+      # - name: Generate image
+      #   run: python scripts/gen_image.py
 
       - name: Commit markdown
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add posts/news/kids/*.md
-          git commit -m "auto: NewsIF kids article $(date -u '+%Y-%m-%d')" || echo "nothing to commit"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git add posts/news/main/*.md
+          git commit -m "auto: newsIF $(date -u '+%Y-%m-%d')" || echo "nothing to commit"
+          git pull origin main --rebase --autostash || echo "rebase failed"
+          git push origin HEAD:main || echo "push failed"
 
-      - name: Post to WordPress (Kids)
-        run: python scripts/post_to_wp_kids.py
+      - name: Post to WordPress
+        run: python scripts/post_to_wp.py
