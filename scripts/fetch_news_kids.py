@@ -4,9 +4,9 @@ from datetime import datetime, timedelta
 import os
 
 API_KEY = os.getenv("NEWS_API_KEY")
-TOPIC_FILE = "data/topics_main.json"
-OUTPUT_FILE = "tmp/news.json"
-USED_TITLES_FILE = "tmp/used_titles.json"
+TOPIC_FILE = "data/topics_kids.json"
+OUTPUT_FILE = "tmp/news_kids.json"
+USED_TITLES_FILE = "tmp/used_titles_kids.json"
 
 def load_topics():
     with open(TOPIC_FILE, "r", encoding="utf-8") as f:
