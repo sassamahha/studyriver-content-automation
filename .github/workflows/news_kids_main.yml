@@ -25,14 +25,10 @@ jobs:
           pip install openai requests feedparser pillow python-dateutil markdown-it-py markdown
 
       - name: Fetch latest news
-        run: python scripts/fetch_news.py
+        run: python scripts/fetch_news_kids.py
 
       - name: Generate article
-        run: python scripts/gen_article_news.py
-
-      # 👇 不要になった画像生成は削除済み
-      # - name: Generate image
-      #   run: python scripts/gen_image.py
+        run: python scripts/gen_article_news_kids.py
 
       - name: Commit markdown
         run: |
@@ -44,4 +40,4 @@ jobs:
           git push origin HEAD:main || echo "push failed"
 
       - name: Post to WordPress
-        run: python scripts/post_to_wp.py
+        run: python scripts/post_to_wp_kids.py
