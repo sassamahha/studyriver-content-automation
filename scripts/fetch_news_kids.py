@@ -1,63 +1,57 @@
 import requests
 import json
-import os
 from datetime import datetime, timedelta
-import random
-import re
+import os
 
 API_KEY = os.getenv("NEWS_API_KEY")
-TOPIC_FILE = "data/topics_kids.json"
-OUTPUT_FILE = "tmp/news_kids.json"
-POST_DIR = "posts/news/kids/"
+TOPIC_FILE = "data/topics_main.json"
+OUTPUT_FILE = "tmp/news.json"
+USED_TITLES_FILE = "tmp/used_titles.json"
 
 def load_topics():
     with open(TOPIC_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def sanitize_title(title):
-    return re.sub(r"[^a-zA-Z0-9\-]", "-", title.lower()).strip("-")
+def load_used_titles():
+    if os.path.exists(USED_TITLES_FILE):
+        with open(USED_TITLES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return []
 
-def is_already_posted(title):
-    slug = sanitize_title(title)[:40]
-    date_prefix = datetime.now().strftime("%Y-%m-%d")
-    filename = f"{POST_DIR}{date_prefix}-{slug}.md"
-    return os.path.exists(filename)
+def save_used_title(title):
+    titles = load_used_titles()
+    titles.append(title)
+    titles = titles[-30:]  # 過去30件だけ記録
+    with open(USED_TITLES_FILE, "w", encoding="utf-8") as f:
+        json.dump(titles, f, ensure_ascii=False)
 
 def fetch_news(query):
     yesterday = (datetime.utcnow() - timedelta(days=1)).date()
     url = (
         f"https://newsapi.org/v2/everything?"
-        f"q={query}&from={yesterday}&sortBy=publishedAt&language=en&pageSize=5&apiKey={API_KEY}"
+        f"q={query}&from={yesterday}&sortBy=publishedAt&language=en&pageSize=10&apiKey={API_KEY}"
     )
     response = requests.get(url)
     return response.json()
 
 def main():
+    os.makedirs("tmp", exist_ok=True)
     topics = load_topics()
     query = " OR ".join(topics)
-    response = fetch_news(query)
-    articles = response.get("articles", [])
+    news_data = fetch_news(query)
+    used_titles = load_used_titles()
 
-    if not articles:
-        print("❌ No news articles found.")
-        return
+    for article in news_data.get("articles", []):
+        title = article.get("title", "")
+        if title not in used_titles:
+            # 保存対象が決定したら書き出し
+            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+                json.dump({"articles": [article]}, f, ensure_ascii=False, indent=2)
+            save_used_title(title)
+            print(f"✅ Fetched: {title}")
+            return
 
-    # フィルタ：未投稿の記事だけに絞る
-    new_articles = [a for a in articles if not is_already_posted(a["title"])]
-
-    if not new_articles:
-        print("⚠️ All fetched articles already posted. Skipping.")
-        return
-
-    # ランダムで1件選択
-    chosen = random.choice(new_articles)
-
-    # 保存
-    os.makedirs("tmp", exist_ok=True)
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump({"articles": [chosen]}, f, indent=2, ensure_ascii=False)
-
-    print("✅ New article (kids) selected and saved:", chosen["title"])
+    print("❌ 重複しないニュースが見つかりませんでした")
 
 if __name__ == "__main__":
     main()
