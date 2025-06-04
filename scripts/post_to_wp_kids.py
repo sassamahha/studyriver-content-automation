@@ -89,11 +89,6 @@ def main():
 
     media_id = random.choice(MEDIA_IDS)
     post_article(title, html, media_id)
-    
-    # 投稿済みファイルを退避して二重投稿を防ぐ
-    archive_dir = POST_DIR + "_posted"
-    os.makedirs(archive_dir, exist_ok=True)
-    shutil.move(latest, os.path.join(archive_dir, os.path.basename(latest)))
 
 if __name__ == "__main__":
     main()
