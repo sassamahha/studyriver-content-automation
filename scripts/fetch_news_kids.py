@@ -1,57 +1,88 @@
-import requests
-import json
+#!/usr/bin/env python3
+"""
+Kids-friendly news fetcher
+  - topics_kids.json を使って 1 本だけ取得
+  - stop_words.json で NG ワード除外
+  - 失敗しても tmp/news_kids.json を空 JSON で残す
+"""
+
+from __future__ import annotations
+import json, os, random, re, sys, urllib.parse
 from datetime import datetime, timedelta
-import os
+from pathlib import Path
+import requests
 
-API_KEY = os.getenv("NEWS_API_KEY")
-TOPIC_FILE = "data/topics_kids.json"
-OUTPUT_FILE = "tmp/news_kids.json"
-USED_TITLES_FILE = "tmp/used_titles_kids.json"
+# ───────── 設定 (★子ども用に変更) ─────────
+API_KEY       = os.getenv("NEWS_API_KEY")
+TOPIC_FILE    = "data/topics_kids.json"      # ← kids トピック
+STOP_FILE     = "data/stop_words.json"
+OUTPUT_FILE   = "tmp/news_kids.json"         # ← kids 向け出力
+USED_FILE     = "tmp/used_titles_kids.json"  # ← kids 向け重複管理
 
-def load_topics():
-    with open(TOPIC_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+PAGE_SIZE     = 20
+KEEP_HISTORY  = 30
+TIME_WINDOW   = 1   # day
 
-def load_used_titles():
-    if os.path.exists(USED_TITLES_FILE):
-        with open(USED_TITLES_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+# ───────── 共有 util ─────────
+def load_json(path: str, default):
+    p = Path(path)
+    return json.loads(p.read_text("utf-8")) if p.exists() else default
 
-def save_used_title(title):
-    titles = load_used_titles()
-    titles.append(title)
-    titles = titles[-30:]  # 過去30件だけ記録
-    with open(USED_TITLES_FILE, "w", encoding="utf-8") as f:
-        json.dump(titles, f, ensure_ascii=False)
+def save_json(path: str, obj) -> None:
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(json.dumps(obj, ensure_ascii=False, indent=2), "utf-8")
 
-def fetch_news(query):
-    yesterday = (datetime.utcnow() - timedelta(days=1)).date()
+topics    = load_json(TOPIC_FILE, [])
+stop_list = load_json(STOP_FILE, [])
+stop_re   = re.compile("|".join(map(re.escape, stop_list)), re.I) if stop_list else None
+used_set  = set(load_json(USED_FILE, []))
+
+if not topics:
+    sys.exit("❌ kids topics list empty")
+
+# ───────── NewsAPI 呼び出し ─────────
+def query_news(q: str) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=TIME_WINDOW)).date()
+    encoded = urllib.parse.quote_plus(q)
     url = (
-        f"https://newsapi.org/v2/everything?"
-        f"q={query}&from={yesterday}&sortBy=publishedAt&language=en&pageSize=10&apiKey={API_KEY}"
+        "https://newsapi.org/v2/everything?"
+        f"q=\"{encoded}\"&from={since}"
+        f"&language=en&sortBy=publishedAt&pageSize={PAGE_SIZE}"
+        f"&apiKey={API_KEY}"
     )
-    response = requests.get(url)
-    return response.json()
+    try:
+        return requests.get(url, timeout=30).json().get("articles", [])
+    except Exception as e:
+        print(f"⚠️  NewsAPI error for '{q}': {e}")
+        return []
 
-def main():
-    os.makedirs("tmp", exist_ok=True)
-    topics = load_topics()
-    query = " OR ".join(topics)
-    news_data = fetch_news(query)
-    used_titles = load_used_titles()
+# ───────── メイン処理 ─────────
+random.shuffle(topics)
+picked: dict | None = None
 
-    for article in news_data.get("articles", []):
-        title = article.get("title", "")
-        if title not in used_titles:
-            # 保存対象が決定したら書き出し
-            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-                json.dump({"articles": [article]}, f, ensure_ascii=False, indent=2)
-            save_used_title(title)
-            print(f"✅ Fetched: {title}")
-            return
+for topic in topics:
+    for art in query_news(topic):
+        title = art.get("title", "")
+        snippet = (art.get("description") or "") + (art.get("content") or "")
 
-    print("❌ 重複しないニュースが見つかりませんでした")
+        if title in used_set:
+            continue
+        if stop_re and stop_re.search(title + snippet):
+            continue
+        picked = art
+        break
+    if picked:
+        break
+
+# ───────── 保存 ─────────
+if picked:
+    save_json(OUTPUT_FILE, {"articles": [picked]})
+    used_set.add(picked["title"])
+    save_json(USED_FILE, list(used_set)[-KEEP_HISTORY:])
+    print(f"✅ kids saved: {picked['title']}")
+else:
+    save_json(OUTPUT_FILE, {"articles": []})
+    print("❌ kids – no suitable article; empty JSON written")
 
 if __name__ == "__main__":
-    main()
+    pass   # 全処理は import でも使えるように上記で完結
