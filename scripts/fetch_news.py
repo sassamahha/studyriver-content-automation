@@ -1,87 +1,65 @@
 #!/usr/bin/env python3
 """
-Fetch *one* future-oriented English article per run
- ─ 重複(過去 KEEP_HISTORY 件)除外
- ─ stop_words.json で NG ワードフィルタ
- ─ 失敗時でも tmp/news.json を必ず残す
+topics_main.json のキーワードを 1 つずつ試し、
+まだ使っていないタイトルの記事を 1 本取得して tmp/news.json に保存
 """
-
-from __future__ import annotations
-import json, os, random, re, sys, urllib.parse
+import json, os, random, requests
 from datetime import datetime, timedelta
 from pathlib import Path
-import requests
 
-# ───────── 設定 ─────────
-API_KEY      = os.getenv("NEWS_API_KEY")
-TOPIC_FILE   = "data/topics_main.json"
-STOP_FILE    = "data/stop_words.json"
-OUTPUT_FILE  = "tmp/news.json"
-USED_FILE    = "tmp/used_titles.json"
+API_KEY          = os.getenv("NEWS_API_KEY")
+TOPIC_FILE       = "data/topics_main.json"
+OUTPUT_FILE      = "tmp/news.json"
+USED_TITLES_FILE = "tmp/used_titles.json"
+MAX_PER_TOPIC    = 25          # NewsAPI pageSize
+LANG             = "en"
+DAYS_BACK        = 3           # 直近 n 日以内の記事だけ対象
 
-PAGE_SIZE     = 20          # NewsAPI 1 クエリ取得件数
-KEEP_HISTORY  = 30          # 重複チェック件数
-TIME_WINDOW   = 1           # 何日前までの記事を対象にするか (days)
+TMP_DIR = Path("tmp"); TMP_DIR.mkdir(exist_ok=True)
 
-# ───────── 便利関数 ─────────
-def load_json(path: str, default):
+# ───────────────────────────
+def load_json(path: str, fallback):
     p = Path(path)
-    return json.loads(p.read_text("utf-8")) if p.exists() else default
+    return fallback if not p.exists() else json.loads(p.read_text())
 
-def save_json(path: str, obj) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(obj, ensure_ascii=False, indent=2), "utf-8")
+def save_json(path: str, data) -> None:
+    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
-# ───────── データロード ─────────
-topics = load_json(TOPIC_FILE, [])
-if not topics:
-    sys.exit("❌ topic list empty")
-
-stop_words = load_json(STOP_FILE, [])
-stop_re    = re.compile("|".join(map(re.escape, stop_words)), re.I) if stop_words else None
-used_set   = set(load_json(USED_FILE, []))
-
-# ───────── NewsAPI 呼び出し ─────────
-def query_news(q: str) -> list[dict]:
-    since = (datetime.utcnow() - timedelta(days=TIME_WINDOW)).date()
-    encoded = urllib.parse.quote_plus(q)
-    url = (
+def fetch_news(keyword: str):
+    since = (datetime.utcnow() - timedelta(days=DAYS_BACK)).date()
+    url   = (
         "https://newsapi.org/v2/everything?"
-        f"q=\"{encoded}\"&from={since}"
-        f"&language=en&sortBy=publishedAt&pageSize={PAGE_SIZE}"
+        f"q={keyword}"
+        f"&from={since}"
+        f"&sortBy=publishedAt"
+        f"&language={LANG}"
+        f"&pageSize={MAX_PER_TOPIC}"
         f"&apiKey={API_KEY}"
     )
-    try:
-        return requests.get(url, timeout=30).json().get("articles", [])
-    except Exception as e:
-        print(f"⚠️  NewsAPI error for '{q}': {e}")
-        return []
+    return requests.get(url, timeout=20).json()
 
-# ───────── メイン処理 ─────────
-random.shuffle(topics)                    # 偏りを抑える
-picked_article: dict | None = None
+# ───────────────────────────
+def main():
+    topics       = load_json(TOPIC_FILE, [])
+    used_titles  = load_json(USED_TITLES_FILE, [])
 
-for topic in topics:
-    for art in query_news(topic):
-        title = art.get("title", "")
-        snippet = (art.get("description") or "") + (art.get("content") or "")
+    random.shuffle(topics)          # 偏り防止
 
-        if title in used_set:
-            continue                      # 重複
-        if stop_re and stop_re.search(title + snippet):
-            continue                      # NG ワード
-        picked_article = art
-        break
-    if picked_article:
-        break
+    for kw in topics:
+        data = fetch_news(kw)
+        for art in data.get("articles", []):
+            title = art.get("title", "").strip()
+            if title and title not in used_titles:
+                save_json(OUTPUT_FILE, {"articles": [art]})
+                used_titles.append(title)
+                used_titles = used_titles[-40:]   # ローテーション 40件保持
+                save_json(USED_TITLES_FILE, used_titles)
+                print(f"✅ pick: “{title}” ← {kw}")
+                return
 
-# ───────── 結果保存 ─────────
-if picked_article:
-    save_json(OUTPUT_FILE, {"articles": [picked_article]})
-    used_set.add(picked_article["title"])
-    save_json(USED_FILE, list(used_set)[-KEEP_HISTORY:])
-    print(f"✅  Saved: {picked_article['title']}")
-else:
-    # 空 JSON を書き出して後段でスキップ処理を可能に
-    save_json(OUTPUT_FILE, {"articles": []})
-    print("❌  No suitable article found – wrote empty JSON")
+        print(f"⚠ no fresh article for '{kw}'")
+
+    print("❌ 新規記事を見つけられませんでした")
+
+if __name__ == "__main__":
+    main()
