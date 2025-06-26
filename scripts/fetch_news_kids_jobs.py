@@ -9,7 +9,7 @@ API_KEY           = os.getenv("NEWS_API_KEY")
 TOPIC_FILE        = "data/topics_kids_jobs.json"
 SIGNAL_FILE       = "data/future_signals_kids_jobs.json"
 STOP_FILE         = "data/stop_words.json"
-OUTPUT_FILE       = "tmp/news.json"
+OUTPUT_FILE       = "tmp/news_kids_jobs.json"
 USED_TITLES_FILE  = "tmp/used_titles.json"
 
 MAX_PER_CALL      = 25
