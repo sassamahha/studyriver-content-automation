@@ -1,63 +1,99 @@
 #!/usr/bin/env python3
 """
-topics_main.json のキーワードを 1 つずつ試し、
-まだ使っていないタイトルの記事を 1 本取得して tmp/news.json に保存
+topics_main.json から主題を 1 つ
+future_signals.json から未来シグナルを 1 つ抽選し、
+  1. qInTitle で検索
+  2. ヒット 0 → q にフォールバック
+  3. それでも 0 → “シグナルだけ” 緩め検索
+取得記事のタイトルが未使用なら tmp/news.json に保存
 """
 import json, os, random, requests
 from datetime import datetime, timedelta
 from pathlib import Path
 
-API_KEY          = os.getenv("NEWS_API_KEY")
-TOPIC_FILE       = "data/topics_main.json"
-OUTPUT_FILE      = "tmp/news.json"
-USED_TITLES_FILE = "tmp/used_titles.json"
-MAX_PER_TOPIC    = 25          # NewsAPI pageSize
-LANG             = "en"
-DAYS_BACK        = 3           # 直近 n 日以内の記事だけ対象
+# ─────────── settings
+API_KEY           = os.getenv("NEWS_API_KEY")
+TOPIC_FILE        = "data/topics_main.json"
+SIGNAL_FILE       = "data/future_signals.json"     # ←★新規
+STOP_FILE         = "data/stop_words.json"
+OUTPUT_FILE       = "tmp/news.json"
+USED_TITLES_FILE  = "tmp/used_titles.json"
+
+MAX_PER_CALL      = 25
+LANG              = "en"
+DAYS_BACK         = 3
+ROTATE_KEEP       = 40    # used_titles の保持件数
 
 TMP_DIR = Path("tmp"); TMP_DIR.mkdir(exist_ok=True)
 
-# ───────────────────────────
+# ─────────── utils
 def load_json(path: str, fallback):
-    p = Path(path)
-    return fallback if not p.exists() else json.loads(p.read_text())
+    p = Path(path);  return fallback if not p.exists() else json.loads(p.read_text())
 
 def save_json(path: str, data) -> None:
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
-def fetch_news(keyword: str):
-    since = (datetime.utcnow() - timedelta(days=DAYS_BACK)).date()
-    url   = (
-        "https://newsapi.org/v2/everything?"
-        f"q={keyword}"
-        f"&from={since}"
-        f"&sortBy=publishedAt"
-        f"&language={LANG}"
-        f"&pageSize={MAX_PER_TOPIC}"
-        f"&apiKey={API_KEY}"
-    )
-    return requests.get(url, timeout=20).json()
+def build_query(topic: str, signal: str, stop_words: list[str]) -> str:
+    neg = " ".join(f'-"{w}"' for w in stop_words)
+    return f'{signal} AND "{topic}" {neg}'.strip()
 
-# ───────────────────────────
+def call_newsapi(params: dict) -> list[dict]:
+    url = "https://newsapi.org/v2/everything"
+    resp = requests.get(url, params|{"apiKey": API_KEY}, timeout=20).json()
+    return resp.get("articles", [])
+
+# ─────────── main
 def main():
-    topics       = load_json(TOPIC_FILE, [])
-    used_titles  = load_json(USED_TITLES_FILE, [])
+    topics      = load_json(TOPIC_FILE, [])
+    signals     = load_json(SIGNAL_FILE, [])
+    stop_words  = load_json(STOP_FILE, [])
+    used_titles = load_json(USED_TITLES_FILE, [])
 
-    random.shuffle(topics)          # 偏り防止
+    random.shuffle(topics)
+    since = (datetime.utcnow() - timedelta(days=DAYS_BACK)).date().isoformat()
 
-    for kw in topics:
-        data = fetch_news(kw)
-        for art in data.get("articles", []):
-            title = art.get("title", "").strip()
+    for topic in topics:
+        signal = random.choice(signals)
+        base_q = build_query(topic, signal, stop_words)
+
+        # --- ①タイトル検索
+        articles = call_newsapi({
+            "qInTitle": base_q,
+            "language": LANG,
+            "from": since,
+            "sortBy": "publishedAt",
+            "pageSize": MAX_PER_CALL,
+        }) or call_newsapi({
+            # --- ②本文検索フォールバック
+            "q": base_q,
+            "language": LANG,
+            "from": since,
+            "sortBy": "publishedAt",
+            "pageSize": MAX_PER_CALL,
+        })
+
+        # --- ③さらにゼロなら signal を外して topic 単体検索
+        if not articles:
+            loose_q = build_query(topic, "", stop_words)
+            articles = call_newsapi({
+                "qInTitle": loose_q,
+                "language": LANG,
+                "from": since,
+                "sortBy": "publishedAt",
+                "pageSize": MAX_PER_CALL,
+            })
+
+        for art in articles:
+            title = (art.get("title") or "").strip()
             if title and title not in used_titles:
                 save_json(OUTPUT_FILE, {"articles": [art]})
                 used_titles.append(title)
-                used_titles = used_titles[-40:]   # ローテーション 40件保持
+                used_titles[:] = used_titles[-ROTATE_KEEP:]
                 save_json(USED_TITLES_FILE, used_titles)
-                print(f"✅ pick: “{title}” ← {kw}")
+                print(f"✅ pick: “{title}” ← {signal} + {topic}")
                 return
 
-        print(f"⚠ no fresh article for '{kw}'")
+        print(f"⚠ no fresh article for '{topic}' (signal='{signal}')")
 
     print("❌ 新規記事を見つけられませんでした")
 
