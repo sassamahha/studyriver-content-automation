@@ -28,6 +28,9 @@ jobs:
       - name: Fetch latest news
         run: python scripts/fetch_news_kids_mind.py
 
+      - name: Debug tmp dir
+        run: ls -R tmp || true
+
       - name: Generate article
         run: python scripts/gen_article_kids_mind.py
 
