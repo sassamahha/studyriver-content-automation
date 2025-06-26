@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 23 * * 1'  # JST 火曜 08:00
     - cron: '0 23 * * 3'  # JST 木曜 08:00
+    - cron: '0 23 * * 5'  # JST 土曜 08:00
   workflow_dispatch: {}
 
 jobs:
