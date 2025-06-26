@@ -13,14 +13,14 @@ import json, os, random, requests, argparse
 from datetime import datetime, timedelta
 from pathlib import Path
 
-API_KEY = os.getenv("NEWS_API_KEY")
-LANG = "en"
+API_KEY  = os.getenv("NEWS_API_KEY")
+LANG     = "en"
 MAX_SIZE = 25
+# 直近 n 日で検索（kids_main は 2 週間とやや広め）
 DAYS = {"kids_main": 14, "kids_mind": 5, "kids_jobs": 3}
-signals.pop(0)
 
 BASE = Path("data")
-TMP = Path("tmp"); TMP.mkdir(exist_ok=True)
+TMP  = Path("tmp"); TMP.mkdir(exist_ok=True)
 
 # ───────────────────────────── helpers
 
@@ -34,12 +34,7 @@ def build_query(topic: str, signal: str, stops: list[str]) -> str:
     neg = " ".join(f'-"{w}"' for w in stops)
     return f'{signal} AND "{topic}" {neg}'.strip()
 
-def fetch_news(query: str, since: str):
-    url = (
-        "https://newsapi.org/v2/everything?" +
-        f"qInTitle={query}&from={since}&sortBy=publishedAt&language={LANG}" +
-        f"&pageSize={MAX_SIZE}&apiKey={API_KEY}"
-    )
+def fetch_news(url: str):
     try:
         return requests.get(url, timeout=20).json().get("articles", [])
     except requests.RequestException:
@@ -54,7 +49,9 @@ def main():
     mode = args.mode
 
     topics  = load(BASE / f"topics_{mode}.json", [])
-    signals = load(BASE / f"future_signals_{mode}.json", [""])  # kids_main は空でOK
+    signals = load(BASE / f"future_signals_{mode}.json", [])
+    if "" not in signals:  # 空信号も入れてシグナルなし検索を許容
+        signals.append("")
     stops   = load(BASE / "stop_words.json", [])
 
     used_file = TMP / f"used_titles_{mode}.json"
@@ -67,19 +64,21 @@ def main():
         signal = random.choice(signals)
         query  = build_query(topic, signal, stops)
 
-        arts = fetch_news(query, since)
+        url_title = (
+            "https://newsapi.org/v2/everything?qInTitle=" + query +
+            f"&from={since}&sortBy=publishedAt&language={LANG}" +
+            f"&pageSize={MAX_SIZE}&apiKey={API_KEY}"
+        )
+        arts = fetch_news(url_title)
 
-        # フォールバック：本文検索
+        # フォールバック：本文検索（タイトルヒット 0 件のとき）
         if not arts:
-            url = (
-                "https://newsapi.org/v2/everything?" +
-                f"q={query}&from={since}&sortBy=publishedAt&language={LANG}" +
+            url_body = (
+                "https://newsapi.org/v2/everything?q=" + query +
+                f"&from={since}&sortBy=publishedAt&language={LANG}" +
                 f"&pageSize={MAX_SIZE}&apiKey={API_KEY}"
             )
-            try:
-                arts = requests.get(url, timeout=20).json().get("articles", [])
-            except requests.RequestException:
-                arts = []
+            arts = fetch_news(url_body)
 
         for art in arts:
             title = (art.get("title") or "").strip()
@@ -89,9 +88,9 @@ def main():
                 used.append(title)
                 used[:] = used[-40:]  # keep last 40
                 save(used_file, used)
-                print(f"✅ {mode}: “{title}” ← {signal} + {topic}")
+                print(f"✅ {mode}: \"{title}\" ← {signal or 'NO-SIGNAL'} + {topic}")
                 return
-        print(f"⚠ {mode}: no fresh news for '{topic}'")
+        print(f"⚠ {mode}: no fresh news for '{topic}' (signal='{signal}')")
 
     print(f"❌ {mode}: 新規記事を見つけられませんでした")
 
