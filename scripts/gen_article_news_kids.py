@@ -6,7 +6,7 @@ from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-INPUT_FILE = "tmp/news_kids_main.json"
+INPUT_FILE = "tmp/news_kids.json"
 OUTPUT_DIR = "posts/news/kids/"
 
 def sanitize_title(title):
@@ -72,6 +72,7 @@ URL: {url}
 - 最後に価値観の変化
 
 ## ご家庭で話せる問い（親子対話のヒント）
+→ 以下のルールに従って、親子で話せる問いをリスト形式で3つ生成してください。
 → 以下のルールに従って、親子で話せる問いを3つ生成して、必ずリスト形式で出力してください（テーブル形式はNG）
     - 各問いは、子どもが身近な視点からテーマについて考え、自分ごととして話せるような問いとしてください。
     - 全体構成：表形式（「質問例」と「ねらい」の2列）で出力
