@@ -1,82 +1,136 @@
 #!/usr/bin/env python3
 """
-post_to_wp_kids.py
-────────────────────────────────────────────────────────────
-Kids シリーズの記事（Markdown）を WordPress に投稿するスクリプト
-  * アイキャッチは MEDIA_IDS を重複させずローテート
-  * カテゴリー / タグは --subtype で切り替え
+Kids-News: Markdown → WordPress 投稿スクリプト
+アイキャッチ画像は MEDIA_IDS を 1 周使い切るまで重複させない。
 """
 
-import argparse, base64, glob, json, os, random
+import base64
+import glob
+import json
+import os
+import random
 from pathlib import Path
 
-import markdown, requests
+import markdown
+import requests
 
-# ── WP 接続情報 ───────────────────────────────────────────
-WP_URL   = os.getenv("WP_URL")      # 末尾スラッシュなし
-WP_USER  = os.getenv("WP_USER")
-WP_PASS  = os.getenv("WP_APP_PASS")
 
-# ── Kids ディレクトリ ────────────────────────────────────
-POST_DIR = "posts/news/kids"
+# ──────────────────────────
+# WordPress 接続情報（GitHub Secrets / .env）
+# ──────────────────────────
+WP_URL      = os.getenv("WP_URL")          # 例: https://studyriver.jp（末尾スラッシュなし）
+WP_USER     = os.getenv("WP_USER")
+WP_APP_PASS = os.getenv("WP_APP_PASS")
 
-# サブタイプ別のカテゴリーID & タグID （あとで WP ダッシュボードで確認して更新）
-TAXONOMY = {
-    "kids_main": {"cat": 633, "tags": [586, 1022]},
-    "kids_mind": {"cat": 1185, "tags": [1187, 1191, 1193, 1022]},   
-    "kids_jobs": {"cat": 1183, "tags": [1195, 1022]},   
-}
+# ──────────────────────────
+# Kids 用ディレクトリ & タクソノミ
+# ──────────────────────────
+POST_DIR    = "posts/news/kids"
+CATEGORY_ID = 633
+TAG_IDS     = [586, 1022]
 
-# ── アイキャッチ候補 ────────────────────────────────────
-MEDIA_IDS = [1643, 1642, 1641, 1640, 1140, 1077, 1078, 1104, 3242]
+# ──────────────────────────
+# アイキャッチ候補（事前アップしたメディア ID）
+# ──────────────────────────
+MEDIA_IDS = [
+    1643, 1642, 1641, 1640, 1140, 1077, 1078, 1104,
+]
+
+# Kids 用プールは大人版と分離
 POOL_FILE = Path("tmp/media_pool_kids.json")
 
-# ── Util：画像プール ────────────────────────────────────
-def _load_pool(): return json.loads(POOL_FILE.read_text()) if POOL_FILE.exists() else []
-def _save_pool(pool): POOL_FILE.parent.mkdir(exist_ok=True); POOL_FILE.write_text(json.dumps(pool))
 
-def next_media_id():
+# ──────────────────────────
+# 画像プールユーティリティ
+# ──────────────────────────
+def _load_pool() -> list[int]:
+    if POOL_FILE.exists():
+        return json.loads(POOL_FILE.read_text())
+    return []
+
+
+def _save_pool(pool: list[int]) -> None:
+    POOL_FILE.parent.mkdir(exist_ok=True)
+    POOL_FILE.write_text(json.dumps(pool))
+
+
+def next_media_id() -> int:
+    """MEDIA_IDS を 1 周使い切るまで同じ ID を選ばない"""
     pool = _load_pool()
-    if not pool:
-        pool = MEDIA_IDS[:]; random.shuffle(pool)
-    mid = pool.pop(); _save_pool(pool); return mid
+    if not pool:                       # 使い切ったらシャッフルして再生成
+        pool = MEDIA_IDS[:]
+        random.shuffle(pool)
 
-# ── HTTP ヘルパ ───────────────────────────────────────────
-AUTH_HDR = {
-    "Authorization": "Basic " + base64.b64encode(f"{WP_USER}:{WP_PASS}".encode()).decode(),
+    media_id = pool.pop()
+    _save_pool(pool)
+    return media_id
+
+
+# ──────────────────────────
+# WordPress ヘルパ
+# ──────────────────────────
+def _basic_auth() -> str:
+    token = f"{WP_USER}:{WP_APP_PASS}"
+    return base64.b64encode(token.encode()).decode()
+
+
+HEADERS = {
+    "Authorization": f"Basic {_basic_auth()}",
     "Content-Type": "application/json",
 }
 
-def post_article(title, html, cat_id, tag_ids, media_id):
+
+def post_article(title: str, html: str, media_id: int) -> None:
     url = f"{WP_URL}/wp-json/wp/v2/posts"
-    payload = {"title": title, "content": html, "status": "publish",
-               "categories": [cat_id], "tags": tag_ids}
-    res = requests.post(url, headers=AUTH_HDR, json=payload)
+    payload = {
+        "title": title,
+        "content": html,
+        "status": "publish",
+        "categories": [CATEGORY_ID],
+        "tags": TAG_IDS,
+    }
+
+    res = requests.post(url, headers=HEADERS, json=payload)
+    print("DEBUG status:", res.status_code, "len", len(res.text))
+
     if res.status_code not in (200, 201):
-        raise RuntimeError(f"Post failed: {res.status_code}: {res.text}")
-    post_id = res.json()["id"]; print("✅ Posted:", res.json()['link'])
-    # アイキャッチ
-    r = requests.post(f\"{WP_URL}/wp-json/wp/v2/posts/{post_id}\",
-                      headers=AUTH_HDR, json={\"featured_media\": media_id})
-    print(\"📷 アイキャッチ\", \"OK\" if r.ok else \"FAIL\", r.status_code)
+        raise RuntimeError(f"❌ Post failed: {res.status_code}: {res.text}")
 
-# ── メイン ──────────────────────────────────────────────
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument(\"--subtype\", choices=TAXONOMY.keys(), default=\"kids_main\")
-    args = ap.parse_args()
+    post_id = res.json()["id"]
+    print("✅ Posted:", res.json()["link"])
+    _update_featured_image(post_id, media_id)
 
-    md_files = glob.glob(f\"{POST_DIR}/*.md\")
-    if not md_files: return print(\"❌ No articles to post\")
 
-    latest = max(md_files, key=os.path.getmtime)
-    md = Path(latest).read_text()
-    title = md.splitlines()[0].lstrip('# ').strip()
-    html  = markdown.markdown(md)
+def _update_featured_image(post_id: int, media_id: int) -> None:
+    url = f"{WP_URL}/wp-json/wp/v2/posts/{post_id}"
+    res = requests.post(
+        url,
+        headers=HEADERS,
+        json={"featured_media": media_id},
+    )
+    msg = "📷 アイキャッチ追加" if res.ok else "⚠️ アイキャッチ追加失敗"
+    print(msg, res.status_code)
 
-    tax    = TAXONOMY[args.subtype]
-    media  = next_media_id()
-    print(f\"🎲 subtype={args.subtype}, category={tax['cat']}, media={media}\")
-    post_article(title, html, tax['cat'], tax['tags'], media)
 
-if __name__ == \"__main__\": main()
+# ──────────────────────────
+# メイン処理
+# ──────────────────────────
+def main() -> None:
+    files = glob.glob(f"{POST_DIR}/*.md")
+    if not files:
+        print("❌ No articles to post.")
+        return
+
+    latest = max(files, key=os.path.getmtime)          # 最終更新 1 本
+    md_text = Path(latest).read_text(encoding="utf-8")
+
+    title = md_text.splitlines()[0].lstrip("#").strip()
+    html  = markdown.markdown(md_text)
+
+    media_id = next_media_id()
+    print("🎲 Selected featured_media ID:", media_id)
+    post_article(title, html, media_id)
+
+
+if __name__ == "__main__":
+    main()
