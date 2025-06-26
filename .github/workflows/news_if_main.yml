@@ -1,4 +1,4 @@
-name: NewsIF AutoPost (Main)
+name: Main NewsIF (Daily)
 
 on:
   schedule:
