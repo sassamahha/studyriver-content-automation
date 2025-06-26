@@ -35,7 +35,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Post to WordPress (Kids Mindfulness category)
-        run: python scripts/post_to_wp_kids.py --category_id 124 --subtype kids_mind
+        run: python scripts/post_to_wp_kids_mind.py 
         env:
           WP_USER: ${{ secrets.WP_USER }}
           WP_PASS: ${{ secrets.WP_PASS }}
