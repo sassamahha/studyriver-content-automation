@@ -20,7 +20,7 @@ def build_messages(news):
     user_prompt = f"""小学校低〜中学年のこどもと保護者を対象に「こころの扱い方」をテーマとした読み物記事を作成してください。
 
 【ニュース】
-タイトル: {title}
+{title}
 URL: {url}
 概要: {desc}
 
