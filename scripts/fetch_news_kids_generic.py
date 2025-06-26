@@ -16,7 +16,7 @@ from pathlib import Path
 API_KEY = os.getenv("NEWS_API_KEY")
 LANG = "en"
 MAX_SIZE = 25
-DAYS = {"kids_main": 7, "kids_mind": 5, "kids_jobs": 3}
+DAYS = {"kids_main": 14, "kids_mind": 5, "kids_jobs": 3}
 
 BASE = Path("data")
 TMP = Path("tmp"); TMP.mkdir(exist_ok=True)
