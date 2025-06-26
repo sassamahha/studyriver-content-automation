@@ -26,7 +26,7 @@ jobs:
           pip install openai requests feedparser pillow python-dateutil markdown-it-py markdown
 
       - name: Fetch latest news
-        run: python scripts/fetch_news_kids.py
+        run: python scripts/fetch_news_kids_generic.py --mode kids_main
 
       - name: Generate article
         run: python scripts/gen_article_news_kids.py

@@ -1,0 +1,36 @@
+name: Kids Future Jobs (Sun)
+
+on:
+  schedule:
+    # JST 日曜 08:00 = UTC 土曜 23:00
+    - cron: '0 23 * * 6'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Fetch Future Jobs news
+        run: python scripts/fetch_news_kids_generic.py --mode kids_jobs
+
+      - name: Generate Future Jobs article
+        run: python scripts/gen_article_kids_jobs.py
+
+      - name: Post to WordPress (category kids-jobs)
+        env:
+          WP_USER: ${{ secrets.WP_USER }}
+          WP_PASS: ${{ secrets.WP_PASS }}
+        run: python scripts/post_to_wp_kids.py --category_id 124 --subtype kids_jobs
