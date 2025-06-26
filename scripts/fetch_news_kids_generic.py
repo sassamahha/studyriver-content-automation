@@ -17,6 +17,7 @@ API_KEY = os.getenv("NEWS_API_KEY")
 LANG = "en"
 MAX_SIZE = 25
 DAYS = {"kids_main": 14, "kids_mind": 5, "kids_jobs": 3}
+signals.pop(0)
 
 BASE = Path("data")
 TMP = Path("tmp"); TMP.mkdir(exist_ok=True)
