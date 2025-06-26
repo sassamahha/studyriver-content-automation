@@ -2,9 +2,7 @@ name: Kids Mindfulness (Fri)
 
 on:
   schedule:
-    # JST 金曜 08:00 = UTC 木曜 23:00
-    - cron: '0 23 * * 4'
-  # 手動実行も許可
+    - cron: '0 23 * * 4'　# JST 金曜 08:00 = UTC 木曜 23:00
   workflow_dispatch: {}
 
 jobs:
@@ -28,17 +26,18 @@ jobs:
       - name: Fetch latest news
         run: python scripts/fetch_news_kids_mind.py
 
-      - name: Debug tmp dir
-        run: ls -R tmp || true
-
       - name: Generate article
         run: python scripts/gen_article_kids_mind.py
+
+      # 👇 不要になった画像生成は削除済み
+      # - name: Generate image
+      #   run: python scripts/gen_image.py
 
       - name: Commit markdown
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add posts/news/kids/*.md
+          git add posts/news/main/*.md
           git commit -m "auto: newsIF $(date -u '+%Y-%m-%d')" || echo "nothing to commit"
           git pull origin main --rebase --autostash || echo "rebase failed"
           git push origin HEAD:main || echo "push failed"
