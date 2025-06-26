@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
+
 import json, os, random, requests
 from datetime import datetime, timedelta
 from pathlib import Path
 
 # ─────────── settings
 API_KEY           = os.getenv("NEWS_API_KEY")
-TOPIC_FILE        = "data/topics_kids_mind.json"
-SIGNAL_FILE       = "data/future_signals_kids_mind.json"
+TOPIC_FILE        = "data/topics_kids_jobs.json"
+SIGNAL_FILE       = "data/future_signals_kids_jobs.json"
 STOP_FILE         = "data/stop_words.json"
 OUTPUT_FILE       = "tmp/news.json"
 USED_TITLES_FILE  = "tmp/used_titles.json"

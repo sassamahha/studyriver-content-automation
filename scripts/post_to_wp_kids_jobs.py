@@ -1,8 +1,8 @@
 
 #!/usr/bin/env python3
 """
-Kids Mindfulness 記事を WordPress へ投稿
-- posts/news/kids-mind/ 直下の最新 Markdown 1 本を投稿
+Kids jobs 記事を WordPress へ投稿
+- posts/news/kids-jobs/ 直下の最新 Markdown 1 本を投稿
 - アイキャッチは MEDIA_IDS をローテーション
 """
 
@@ -27,9 +27,9 @@ WP_APP_PASS = os.getenv("WP_APP_PASS")
 # ──────────────────────────
 # Kids 用ディレクトリ & タクソノミ
 # ──────────────────────────
-POST_DIR    = "posts/news/kids_mind"
-CATEGORY_ID = 1185
-TAG_IDS     = [1187, 1022]
+POST_DIR    = "posts/news/kids_jobs"
+CATEGORY_ID = 1183
+TAG_IDS     = [1195, 1022]
 
 # ──────────────────────────
 # アイキャッチ候補（事前アップしたメディア ID）
@@ -39,7 +39,7 @@ MEDIA_IDS = [
 ]
 
 # Kids 用プールは大人版と分離
-POOL_FILE = Path("tmp/media_pool_kids_mind.json")
+POOL_FILE = Path("tmp/media_pool_kids_jobs.json")
 
 
 # ──────────────────────────

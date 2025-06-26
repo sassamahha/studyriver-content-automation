@@ -5,37 +5,40 @@ on:
     # JST 金曜 08:00 = UTC 木曜 23:00
     - cron: '0 23 * * 4'
   # 手動実行も許可
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
-  build:
+  autopost:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      WP_URL: ${{ secrets.WP_URL }}
+      WP_USER: ${{ secrets.WP_USER }}
+      WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install openai requests feedparser pillow python-dateutil markdown-it-py markdown
 
-      - name: Fetch mindfulness news (kids)
+      - name: Fetch latest news
         run: python scripts/fetch_news_kids_mind.py
-        env:
-          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
 
-      - name: Generate kids mindfulness article
+      - name: Generate article
         run: python scripts/gen_article_kids_mind.py
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Post to WordPress (Kids Mindfulness category)
-        run: python scripts/post_to_wp_kids_mind.py 
-        env:
-          WP_USER: ${{ secrets.WP_USER }}
-          WP_PASS: ${{ secrets.WP_PASS }}
+      - name: Commit markdown
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add posts/news/kids/*.md
+          git commit -m "auto: newsIF $(date -u '+%Y-%m-%d')" || echo "nothing to commit"
+          git pull origin main --rebase --autostash || echo "rebase failed"
+          git push origin HEAD:main || echo "push failed"
+
+      - name: Post to WordPress
+        run: python scripts/post_to_wp_kids_mind.py

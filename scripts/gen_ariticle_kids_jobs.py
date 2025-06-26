@@ -1,108 +1,89 @@
-#!/usr/bin/env python3
-"""
- gen_article_kids_jobs.py
- ───────────────────────────────────────────────────────────
- 日曜配信用：Kids Future Jobs Article Generator
-
- - 入力  : tmp/news_kids_jobs.json （fetch_news_kids_generic.py が生成）
- - 出力先: posts/news/kids/YYYY-MM-DD-job-<hash>.md
- - 目的  : ニュースをヒントに未来の仕事プロフィールを 1 本生成
-   （子ども向け、読みやすい日本語 350〜500 文字）
-"""
-import json, os, openai, textwrap, hashlib
+import os
+import json
+import re
 from datetime import datetime
-from pathlib import Path
+from openai import OpenAI
 
-# ───────── Settings ───────────────────────────────────
-NEWS_FILE = Path("tmp/news_kids_jobs.json")
-POST_DIR  = Path("posts/news/kids")
-POST_DIR.mkdir(parents=True, exist_ok=True)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
-MODEL = "gpt-4o-mini"
+INPUT_FILE = "tmp/news_kids_jobs.json"
+OUTPUT_DIR = "posts/news/kids_jobs/"
 
-# ───────── Prompt Templates ──────────────────────────
-SYS_PROMPT = (
-    "You are a kid-friendly career futurist. "
-    "Target age 8-12. Write concise, engaging Japanese."
-)
+def sanitize_title(title):
+    return re.sub(r"[^a-zA-Z0-9\-]", "-", title.lower()).strip("-")
 
-USER_TEMPLATE = textwrap.dedent(
-    """
-    ### NEWS
-    Title: {title}
-    Desc : {desc}
+def build_messages(news):
+    title = news["articles"][0]["title"]
+    url = news["articles"][0]["url"]
+    desc = news["articles"][0]["description"]
 
-    上記ニュースをヒントに、子ども向け雑誌の "未来のしごと図鑑" 用プロフィールを 1 本書いてください。
-    出力は下記 Markdown フォーマットを厳守。
+    user_prompt = f"""子ども向け雑誌の "未来のしごと図鑑" 用プロフィールを 1 本書いてください。
 
-    ## 未来の仕事：<Job Name>（8〜12文字）
-    ### なにをする？
-    120〜150文字。想像をふくらませる表現で。
-    ### どんな力がいる？
+【ニュース】
+タイトル: {title}
+URL: {url}
+概要: {desc}
+
+--- 出力フォーマット ---
+> タイトルは「未来の職業：一言でどんな仕事をする人orロボットか」で統一してください
+
+    ## 職業：<Job Name>（8〜12文字）
+    - どんな仕事をする人orロボットかを200文字程度で説明してください。
+    
+    ## どんな未来に変えてくれる？
+    - この職業の人が、現代から見てどんな未来を作ってくれる人か、想像をふくらませて、200文字程度で表現してください。
+
+    ## どんな力がいる？
     - スキル1（6〜10文字）
     - スキル2（6〜10文字）
     - スキル3（6〜10文字）
-    ### どうやって学ぶ？
+    ## どうやって学ぶ？
     - 方法1（子どもでも試せる）
     - 方法2
     - 方法3
-    """
-).strip()
+"""
 
-FALLBACK_PROMPT = textwrap.dedent(
-    """
-    子ども向け未来職業プロフィールを 1 本、新規に考案してください。フォーマットは同じ。
-    """
-).strip()
+    return [
+        {
+            "role": "system",
+            "content": "あなたは『StudyRiver（スタリバ）』の未来仮説メディアに記事を寄稿する、読者との会話を大切にする雑誌ライターです。専門的すぎず、親しみやすく、想像を引き出す文章を心がけてください。"
+        },
+        {
+            "role": "user",
+            "content": user_prompt
+        }
+    ]
 
-# ───────── Helper Functions ───────────────────────
-
-def load_news() -> dict | None:
-    if not NEWS_FILE.exists():
-        return None
-    data = json.loads(NEWS_FILE.read_text())
-    return data.get("articles", [None])[0]
-
-
-def call_gpt(prompt: str) -> str:
-    resp = openai.ChatCompletion.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": SYS_PROMPT},
-            {"role": "user", "content": prompt}
-        ],
+def generate_article(messages):
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
         temperature=0.7,
-        max_tokens=800
+        max_tokens=1500
     )
-    return resp.choices[0].message.content.strip()
+    return response.choices[0].message.content
 
-
-def save_markdown(md: str) -> None:
-    date = datetime.utcnow().strftime("%Y-%m-%d")
-    slug = hashlib.md5(md.encode()).hexdigest()[:8]
-    path = POST_DIR / f"{date}-job-{slug}.md"
-    path.write_text(md, encoding="utf-8")
-    print("✅ Saved", path)
-
-# ───────── Main ────────────────────────────────────
+def save_markdown(title, content):
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    slug = sanitize_title(title)[:40]
+    filename = f"{OUTPUT_DIR}{date_str}-{slug}.md"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ Saved: {filename}")
 
 def main():
-    news = load_news()
-    if news:
-        prompt = USER_TEMPLATE.format(
-            title=news.get("title", ""),
-            desc=news.get("description", "")[:400]
-        )
-        md = call_gpt(prompt)
-        if not md.strip():
-            print("⚠ GPT returned empty. Using fallback.")
-            md = call_gpt(FALLBACK_PROMPT)
-    else:
-        print("⚠ NEWS file missing or empty. Using fallback.")
-        md = call_gpt(FALLBACK_PROMPT)
+    with open(INPUT_FILE, "r", encoding="utf-8") as f:
+        news = json.load(f)
 
-    save_markdown(md)
+    if not news.get("articles"):
+        print("❌ ニュース記事が見つかりませんでした。")
+        return
+
+    messages = build_messages(news)
+    article = generate_article(messages)
+    title = news["articles"][0]["title"]
+    save_markdown(title, article)
 
 if __name__ == "__main__":
     main()
