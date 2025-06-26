@@ -41,4 +41,4 @@ jobs:
           git push origin HEAD:main || echo "push failed"
 
       - name: Post to WordPress
-        run: python scripts/post_to_wp_kids.py
+        run: python scripts/post_to_wp_kids.py --subtype kids_main
