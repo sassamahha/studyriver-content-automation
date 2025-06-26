@@ -6,7 +6,7 @@ from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-INPUT_FILE = "tmp/news_kids_main.json"
+INPUT_FILE = "tmp/news.json"
 OUTPUT_DIR = "posts/news/main/"
 
 def sanitize_title(title):
