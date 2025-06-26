@@ -1,4 +1,4 @@
-name: NewsIF AutoPost (Kids)
+name: Kids NewsIF (TUE, THU, SAT)
 
 on:
   schedule:
