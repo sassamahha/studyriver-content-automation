@@ -3,7 +3,7 @@ name: Kids Future Jobs (Sun)
 on:
   schedule:
     # JST 日曜 08:00 = UTC 土曜 23:00
-    - cron: '0 23 * * 6'
+    # - cron: '0 23 * * 6'
   workflow_dispatch: {}
 
 jobs:
