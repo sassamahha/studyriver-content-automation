@@ -3,6 +3,7 @@ name: Main NewsIF (Daily)
 on:
   schedule:
     - cron: '45 9 * * *'  # JST 18:45（毎日）
+    - cron: '0 23 * * *'  # JST 8:00（毎日）
   workflow_dispatch: {}
 
 jobs:
