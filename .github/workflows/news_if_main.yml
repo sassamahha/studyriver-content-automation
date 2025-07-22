@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      NEWS_API_KEY: ${{ secrets.WORLDNEWS_API_KEY }}
+      WORLDNEWS_API_KEY: ${{ secrets.WORLDNEWS_API_KEY }}
       WP_URL: ${{ secrets.WP_URL }}
       WP_USER: ${{ secrets.WP_USER }}
       WP_APP_PASS: ${{ secrets.WP_APP_PASS }}
