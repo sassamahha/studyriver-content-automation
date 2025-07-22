@@ -1,48 +1,62 @@
 #!/usr/bin/env python3
 """
-topics_main.json から主題を 1 つ
+World News API 版 fetch_news.py
+------------------------------------------
+topics_main.json から主題を 1 つ、
 future_signals.json から未来シグナルを 1 つ抽選し、
-  1. qInTitle で検索
-  2. ヒット 0 → q にフォールバック
-  3. それでも 0 → “シグナルだけ” 緩め検索
-取得記事のタイトルが未使用なら tmp/news.json に保存
+
+  1. 「タイトルに signal+topic を含むか」でフィルタ
+  2. ヒット 0 → 本文検索にフォールバック
+  3. さらに 0 → topic 単体で緩め検索
+
+条件を満たす最新記事 1 本を tmp/news.json に保存する。
 """
-import json, os, random, requests
+
+import json, os, random, re, requests
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import List, Dict
 
-# ─────────── settings
-API_KEY           = os.getenv("NEWS_API_KEY")
+# ───────────── settings ──────────────
+API_KEY           = os.getenv("WORLDNEWS_API_KEY")  
 TOPIC_FILE        = "data/topics_main.json"
-SIGNAL_FILE       = "data/future_signals.json"     # ←★新規
+SIGNAL_FILE       = "data/future_signals.json"
 STOP_FILE         = "data/stop_words.json"
 OUTPUT_FILE       = "tmp/news.json"
 USED_TITLES_FILE  = "tmp/used_titles.json"
 
-MAX_PER_CALL      = 25
+MAX_PER_CALL      = 25          # WorldNewsAPI は number=◯ で指定
 LANG              = "en"
 DAYS_BACK         = 3
-ROTATE_KEEP       = 40    # used_titles の保持件数
+ROTATE_KEEP       = 40          # used_titles の保持件数
+API_URL           = "https://api.worldnewsapi.com/search-news"
 
 TMP_DIR = Path("tmp"); TMP_DIR.mkdir(exist_ok=True)
 
-# ─────────── utils
+# ───────────── utils ──────────────────
 def load_json(path: str, fallback):
-    p = Path(path);  return fallback if not p.exists() else json.loads(p.read_text())
+    p = Path(path)
+    return fallback if not p.exists() else json.loads(p.read_text(encoding="utf-8"))
 
 def save_json(path: str, data) -> None:
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
 def build_query(topic: str, signal: str, stop_words: list[str]) -> str:
     neg = " ".join(f'-"{w}"' for w in stop_words)
-    return f'{signal} AND "{topic}" {neg}'.strip()
+    return f'{signal} "{topic}" {neg}'.strip()
 
-def call_newsapi(params: dict) -> list[dict]:
-    url = "https://newsapi.org/v2/everything"
-    resp = requests.get(url, params|{"apiKey": API_KEY}, timeout=20).json()
-    return resp.get("articles", [])
+def call_worldnews(params: Dict) -> List[Dict]:
+    """World News API thin wrapper"""
+    headers = {"x-api-key": API_KEY}
+    resp = requests.get(API_URL, params=params, headers=headers, timeout=20)
+    resp.raise_for_status()
+    return resp.json().get("news", [])
 
-# ─────────── main
+def title_contains(art: Dict, *needles: str) -> bool:
+    title = art.get("title", "").lower()
+    return all(n.lower() in title for n in needles if n)
+
+# ───────────── main ───────────────────
 def main():
     topics      = load_json(TOPIC_FILE, [])
     signals     = load_json(SIGNAL_FILE, [])
@@ -56,35 +70,39 @@ def main():
         signal = random.choice(signals)
         base_q = build_query(topic, signal, stop_words)
 
-        # --- ①タイトル検索
-        articles = call_newsapi({
-            "qInTitle": base_q,
+        # — ① タイトル優先検索
+        arts = call_worldnews({
+            "text": base_q,
             "language": LANG,
-            "from": since,
-            "sortBy": "publishedAt",
-            "pageSize": MAX_PER_CALL,
-        }) or call_newsapi({
-            # --- ②本文検索フォールバック
-            "q": base_q,
-            "language": LANG,
-            "from": since,
-            "sortBy": "publishedAt",
-            "pageSize": MAX_PER_CALL,
+            "earliest-publish-date": since,
+            "sort": "publish-time",
+            "number": MAX_PER_CALL,
         })
+        arts = [a for a in arts if title_contains(a, topic, signal)]
 
-        # --- ③さらにゼロなら signal を外して topic 単体検索
-        if not articles:
-            loose_q = build_query(topic, "", stop_words)
-            articles = call_newsapi({
-                "qInTitle": loose_q,
+        # — ② 本文検索フォールバック
+        if not arts:
+            arts = call_worldnews({
+                "text": base_q,
                 "language": LANG,
-                "from": since,
-                "sortBy": "publishedAt",
-                "pageSize": MAX_PER_CALL,
+                "earliest-publish-date": since,
+                "sort": "publish-time",
+                "number": MAX_PER_CALL,
             })
 
-        for art in articles:
-            title = (art.get("title") or "").strip()
+        # — ③ signal を外して緩め検索
+        if not arts:
+            loose_q = build_query(topic, "", stop_words)
+            arts = call_worldnews({
+                "text": loose_q,
+                "language": LANG,
+                "earliest-publish-date": since,
+                "sort": "publish-time",
+                "number": MAX_PER_CALL,
+            })
+
+        for art in arts:
+            title = art.get("title", "").strip()
             if title and title not in used_titles:
                 save_json(OUTPUT_FILE, {"articles": [art]})
                 used_titles.append(title)
@@ -98,4 +116,6 @@ def main():
     print("❌ 新規記事を見つけられませんでした")
 
 if __name__ == "__main__":
+    if not API_KEY:
+        raise SystemExit("❌ WORLDNEWS_API_KEY env var not set")
     main()
