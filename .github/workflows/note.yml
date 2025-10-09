@@ -1,0 +1,47 @@
+name: Post note
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 3 * * *"   # 毎日12:00 JST
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout content repo
+        uses: actions/checkout@v4
+        with:
+          repository: sassamahha/sabou-content-automation
+          path: content-repo
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Debug — show files
+        run: |
+          pwd
+          ls -la
+          echo "--- note-auto ---"
+          ls -la note-auto
+          echo "--- content-repo ---"
+          ls -la content-repo/posts/sabou | head -n 50
+
+      - name: Install deps
+        run: |
+          python -m pip install -r note-auto/requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Post to note
+        env:
+          NOTE_EMAIL: ${{ secrets.NOTE_EMAIL }}
+          NOTE_PASSWORD: ${{ secrets.NOTE_PASSWORD }}
+        run: python note-auto/post_to_note.py
+
+    concurrency:
+      group: note-post
+      cancel-in-progress: false
