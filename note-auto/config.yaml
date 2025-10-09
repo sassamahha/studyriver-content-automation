@@ -1,0 +1,9 @@
+note:
+  author_id: "study_river"
+  upload_cover: false
+  cover_images_dir: "note-auto/covers"
+
+sources:
+  - repo_dir: "content-repo"
+    glob: "posts/main/*.md"
+    max_per_run: 1  
