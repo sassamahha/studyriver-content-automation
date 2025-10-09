@@ -1,0 +1,6 @@
+feedparser
+pyyaml
+beautifulsoup4
+markdownify
+playwright
+requests
