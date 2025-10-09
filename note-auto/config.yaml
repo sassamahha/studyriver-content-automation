@@ -5,5 +5,5 @@ note:
 
 sources:
   - repo_dir: "content-repo"
-    glob: "posts/main/*.md"
+    glob: "posts/news/main/*.md"
     max_per_run: 1  
