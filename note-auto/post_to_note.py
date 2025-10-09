@@ -37,11 +37,29 @@ def split_frontmatter(md_text: str):
     return {}, md_text
 
 def md_body_from_file(path: Path):
+    """
+    ファイルから本文を読み、**本文の最初のH1をタイトルとして採用**。
+    H1が無ければ frontmatter.title → ファイル名 の順でフォールバック。
+    採用したH1は本文から除去（重複回避）。
+    """
     raw = path.read_text(encoding="utf-8")
     fm, body = split_frontmatter(raw)
-    title = fm.get("title") or path.stem
-    # frontmatter に "slug","tags","lang","date","canonical" 等があれば後で利用
+
+    # 先頭付近のH1を探す（行頭0〜3スペース + #1個 だけをH1とみなす）
+    # 例: "# タイトル" / " # タイトル"
+    m = re.search(r'(?m)^\s{0,3}#(?!#)\s+(.+?)\s*#*\s*$', body)
+    if m:
+        title = unescape(m.group(1)).strip()
+        # H1行を本文から削除（その前後の余分な改行も1個ぶん掃除）
+        start, end = m.span()
+        new_body = (body[:start] + body[end:]).lstrip('\n')
+        body = new_body
+    else:
+        title = fm.get("title") or path.stem
+
+    # frontmatterの他項目（tags, canonical 等）はそのまま返す
     return title, body, fm
+
 
 def sha1_of_text(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
