@@ -15,7 +15,7 @@ jobs:
       - name: Checkout content repo
         uses: actions/checkout@v4
         with:
-          repository: sassamahha/sabou-content-automation
+          repository: sassamahha/studyriver-content-automation
           path: content-repo
           fetch-depth: 0
 
@@ -30,7 +30,7 @@ jobs:
           echo "--- note-auto ---"
           ls -la note-auto
           echo "--- content-repo ---"
-          ls -la content-repo/posts/sabou | head -n 50
+          ls -la content-repo/posts/news/main | head -n 50
 
       - name: Install deps
         run: |
