@@ -5,7 +5,7 @@ on:
     # JST 金曜 08:00 = UTC 木曜 23:00
     # - cron: '0 23 * * 4'
   # 手動実行も許可More actions
-  workflow_dispatch: {}
+  # workflow_dispatch: {}
 
 jobs:
   autopost:
