@@ -5,7 +5,7 @@ from html import unescape
 import yaml, requests
 from bs4 import BeautifulSoup
 from markdownify import markdownify as html2md
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout, expect
 
 # ====== 基本設定（CWD非依存）======
 BASE = Path(__file__).parent.resolve()
@@ -47,15 +47,28 @@ def sha1_of_text(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
 
 # ====== note ログイン/投稿 ======
-def login(page, email, password):
+def _fill_if_exists(page, sel, text):
+    loc = page.locator(sel)
+    if loc.count():
+        loc.first.fill(text)
+        return True
+    return False
+
+def login(page, email=None, password=None):
     """
     /login に行ってメール/パスを入れてログイン完了まで。
-    placeholder 固定に依存しない“頑丈版”。
+    URL遷移が起きなくても、ログイン後UIのDOM出現で合格判定する。
     """
-    page.goto("https://note.com/login", timeout=60000, wait_until="domcontentloaded")
-    page.wait_for_load_state("domcontentloaded")
+    # ENV: StudyRiver専用 → 共通 の順に解決
+    email = email or os.getenv("NOTE_EMAIL_STUDYRIVER") or os.getenv("NOTE_EMAIL")
+    password = password or os.getenv("NOTE_PASSWORD_STUDYRIVER") or os.getenv("NOTE_PASSWORD")
+    if not email or not password:
+        raise RuntimeError("ENV missing: NOTE_EMAIL(_STUDYRIVER) / NOTE_PASSWORD(_STUDYRIVER)")
 
-    # Cookie 同意など出ていれば潰す
+    page.set_default_timeout(30000)
+    page.goto("https://note.com/login", wait_until="domcontentloaded")
+
+    # Cookie同意などを潰す
     for label in ["同意", "同意する", "OK", "Accept", "許可", "わかった"]:
         try:
             page.get_by_role("button", name=re.compile(label)).click(timeout=800)
@@ -70,85 +83,92 @@ def login(page, email, password):
         except Exception:
             pass
 
-    # フォーム入力欄を“柔らかい”セレクタで拾う
-    email_sel = "input[type='email'], input[name='email'], input[autocomplete='username'], input[placeholder*='メール'], input[placeholder*='note ID']"
+    # フォーム入力欄（両対応セレクタ）
+    email_sel = "input[type='email'], input[name='email'], input[autocomplete='username'], input[placeholder*='メール'], input[placeholder*='note ID'], input[name='login_id']"
     pass_sel  = "input[type='password'], input[name='password'], input[autocomplete='current-password'], input[placeholder*='パスワード']"
 
     try:
         page.wait_for_selector(email_sel, timeout=12000)
-        page.locator(email_sel).first.fill(email)
-        page.locator(pass_sel).first.fill(password)
+        _fill_if_exists(page, email_sel, email)
+        _fill_if_exists(page, pass_sel, password)
     except Exception:
-        # 最悪 form から強引に
-        form = page.locator("form").first
-        form.locator("input").nth(0).fill(email)
-        form.locator("input[type='password']").first.fill(password)
+        # 最後の手段：form直指定
+        try:
+            form = page.locator("form").first
+            form.locator("input").nth(0).fill(email)
+            form.locator("input[type='password']").first.fill(password)
+        except Exception:
+            page.screenshot(path="note_login_fail.png", full_page=True)
+            raise RuntimeError("Login fields not found (selector mismatch)")
 
-    # 送信（ナビが起きるなら待つ。起きなくても続行）
-    navigated = False
+    # 送信（遷移が起きても起きなくてもOK）
     try:
-        with page.expect_navigation(wait_until="load", timeout=8000):
-            page.get_by_role("button", name=re.compile("ログイン|Sign in")).click(timeout=1500)
-        navigated = True
+        page.get_by_role("button", name=re.compile("ログイン|Sign in", re.I)).click(timeout=2000)
     except Exception:
         try:
-            with page.expect_navigation(wait_until="load", timeout=8000):
-                page.keyboard.press("Enter")
-            navigated = True
+            page.keyboard.press("Enter")
         except Exception:
             pass
 
-    # ネットワーク静止まで待機してから成功判定
+    # 安定化待ち
     page.wait_for_load_state("networkidle")
 
+    # 成功判定（URL変化 or ログイン後UIのDOM）
     success_selectors = [
-        "a[href*='/home']",
+        "a[href^='/new']",
         "a[href*='/notifications']",
         "a[href^='/me']",
-        "a[href*='/new']",
         "img[alt*='アイコン'], img[alt*='プロフィール']",
     ]
     ok = False
-    for _ in range(24):  # 最大 ~12秒
-        try:
-            if "/home" in page.url or page.url.rstrip("/") == "https://note.com":
-                ok = True
-                break
-            if any(page.locator(sel).count() > 0 for sel in success_selectors):
-                ok = True
-                break
-        except Exception:
-            pass
-        page.wait_for_timeout(500)
+    # URLで合格
+    try:
+        expect(page).to_have_url(re.compile(r"^https://note\.com/(?!login)"), timeout=15000)
+        ok = True
+    except PWTimeout:
+        # DOMで合格
+        for _ in range(24):  # 最大 ~12秒
+            try:
+                if "/home" in page.url or page.url.rstrip("/") == "https://note.com":
+                    ok = True; break
+                if any(page.locator(sel).count() > 0 for sel in success_selectors):
+                    ok = True; break
+            except Exception:
+                pass
+            page.wait_for_timeout(500)
 
     if not ok:
-        raise RuntimeError(f"Login might have failed. current url={page.url}, navigated={navigated}")
+        page.screenshot(path="note_login_fail.png", full_page=True)
+        raise RuntimeError(f"Login might have failed. current url={page.url}")
 
 def open_new_editor(page):
     """
-    プロフ→投稿と同等。/new を経由して /notes/<id>/edit へ。
+    /new を経由して /notes/<id>/edit へ。
     """
     page.goto("https://editor.note.com/new/", timeout=60000)
     page.wait_for_url("**/edit/**", timeout=60000)
-    # エディタ準備（タイトル/本文エリアのどちらかを待つ）
-    ok = False
+    # タイトル/本文エリアのどちらかを待つ
     for _ in range(20):
         if page.locator("textarea[placeholder='記事タイトル'], [placeholder='記事タイトル']").count() > 0:
-            ok = True; break
+            return
         if page.locator('[contenteditable="true"]').count() > 0:
-            ok = True; break
+            return
         page.wait_for_timeout(300)
-    if not ok:
-        raise RuntimeError("エディタが開けませんでした（タイトル/本文エリア検出失敗）")
+    page.screenshot(path="note_editor_fail.png", full_page=True)
+    raise RuntimeError("エディタが開けませんでした（タイトル/本文エリア検出失敗）")
 
 # ====== クリップボード貼り付け ======
 def paste_markdown(page, text: str):
     """
-    クリップボードに text を入れて Ctrl+V で貼り付け。
-    note 側が Markdown を解釈して見出し/リスト等を整形してくれる。
+    クリップボードに text を入れて Ctrl/Cmd+V で貼り付け。
     """
+    # Mac/Windowsどちらでも動くように修正
     page.evaluate("async (t) => await navigator.clipboard.writeText(t)", text)
-    page.keyboard.press("Control+V")
+    # Cmd + V / Ctrl + V 両対応トライ
+    try:
+        page.keyboard.press("Meta+V")
+    except Exception:
+        page.keyboard.press("Control+V")
 
 # ====== Git の最終コミット時間（Last commit date） ======
 def git_last_commit_ts(repo_root: Path, file_path: Path) -> int:
@@ -160,7 +180,6 @@ def git_last_commit_ts(repo_root: Path, file_path: Path) -> int:
         rel = str(file_path.relative_to(repo_root))
     except ValueError:
         rel = str(file_path)
-
     try:
         out = subprocess.check_output(
             ["git", "log", "-1", "--format=%ct", "--", rel],
@@ -227,7 +246,7 @@ def _set_cover_image_any(page, img_path: Path) -> bool:
 
     return False
 
-def publish_flow(page):
+def publish_flow(page, cover_path: Path | None = None):
     """
     右上の『公開に進む』→ publish 画面 → 『投稿する』までを堅く実行。
     - カバー画像を設定している場合はアップロード完了を待つ
@@ -239,25 +258,16 @@ def publish_flow(page):
     page.wait_for_url("**/publish/**", timeout=90000)
     page.wait_for_load_state("domcontentloaded")
 
-    # 2) （あれば）カバー画像アップロードの完了を待つ
-    #   - プレビュー縮小画像 or 「画像を変更」/「削除」ボタンが出るまで待つ
-    #   - 出てこなければ 0.5s × 最大 40 回 (=20s) だけポーリング
-    for _ in range(40):
+    # 2) カバー画像（任意）
+    if cover_path and Path(cover_path).exists():
         try:
-            if page.locator("img").filter(has_text=re.compile("")).count() > 0:
-                break
-            if page.locator("text=画像を変更").count() > 0:
-                break
-            if page.locator("text=削除").count() > 0:
-                break
+            _set_cover_image_any(page, Path(cover_path))
         except Exception:
-            pass
-        page.wait_for_timeout(500)
+            pass  # 任意機能なので握りつぶす
 
     # 3) 『投稿する』が有効になるのを待つ
     post_btn = page.get_by_role("button", name=re.compile("^投稿する$"))
-    # disabled解除待ち（最大 90s）
-    for _ in range(90):
+    for _ in range(90):  # 最大90s
         try:
             if post_btn.is_enabled():
                 break
@@ -265,24 +275,21 @@ def publish_flow(page):
             pass
         page.wait_for_timeout(1000)
 
-    # 4) クリックして公開、画面遷移を待機
+    # 4) クリックして公開
     try:
         with page.expect_navigation(wait_until="load", timeout=120000):
             post_btn.click(timeout=5000)
     except Exception:
-        # フォールバック（ナビが起きない UI でもとにかく押す）
         post_btn.click()
         page.wait_for_load_state("networkidle")
 
-    # 5) 公開できたかを判定。『これは公開前の下書きです。』があれば再試行
+    # 5) 下書き判定→再試行
     def is_draft():
         try:
             return page.locator("text=これは公開前の下書きです").count() > 0
         except Exception:
             return False
-
     if is_draft():
-        # 再度『公開に進む』→『投稿する』
         page.get_by_role("button", name=re.compile("公開に進む|公開へ進む")).click(timeout=12000)
         page.wait_for_url("**/publish/**", timeout=90000)
         page.wait_for_load_state("domcontentloaded")
@@ -301,15 +308,13 @@ def publish_flow(page):
             post_btn.click()
             page.wait_for_load_state("networkidle")
 
-    # 最後にネットワーク静止まで
     page.wait_for_load_state("networkidle")
-
 
 # --- 投稿 -----------------
 def create_post(page, author_id, title, body_md, footer_md=None, canonical_link=None, tags=None):
     open_new_editor(page)
 
-    # タイトルはタイプ
+    # タイトル
     try:
         title_box = page.locator("textarea[placeholder='記事タイトル'], [placeholder='記事タイトル']").first
         title_box.click()
@@ -317,12 +322,12 @@ def create_post(page, author_id, title, body_md, footer_md=None, canonical_link=
         pass
     page.keyboard.type(title)
 
-    # 本文は“貼り付け”で一括投入（Markdown解釈をnoteに任せる）
+    # 本文（Markdown貼り付け）
     editor = page.locator('[contenteditable="true"]').first
     editor.click()
     paste_markdown(page, (body_md or "").strip())
 
-    # カバー画像の選択（config に upload_cover/cover_images_dir がある場合のみ）
+    # カバー画像（config で指定時のみ）
     cover_path = None
     try:
         cfg = load_cfg()
@@ -336,22 +341,32 @@ def create_post(page, author_id, title, body_md, footer_md=None, canonical_link=
     except Exception:
         pass  # 任意機能なので握りつぶす
 
-    # 公開（カバー画像パスを渡す）
+    # 公開
     publish_flow(page, cover_path=cover_path)
 
 # ====== メイン ======
 def run_once():
     cfg = load_cfg()
     posted_map = load_posted_map()
-    email = os.environ["NOTE_EMAIL"]
-    password = os.environ["NOTE_PASSWORD"]
+
+    # ENV（StudyRiver優先→共通）
+    email = os.getenv("NOTE_EMAIL_STUDYRIVER") or os.getenv("NOTE_EMAIL")
+    password = os.getenv("NOTE_PASSWORD_STUDYRIVER") or os.getenv("NOTE_PASSWORD")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # ChromiumでOKだが、片方だけ弾かれる場合はfirefox.launch()に切替検討
+        browser = p.chromium.launch(headless=True, args=['--disable-blink-features=AutomationControlled'])
         # クリップボード権限を付与
-        ctx = browser.new_context(permissions=["clipboard-read", "clipboard-write"])
+        ctx = browser.new_context(permissions=["clipboard-read", "clipboard-write"],
+                                  locale="ja-JP", timezone_id="Asia/Tokyo")
         page = ctx.new_page()
-        login(page, email, password)
+
+        try:
+            login(page, email, password)
+        except Exception as e:
+            page.screenshot(path="fatal_login.png", full_page=True)
+            ctx.close(); browser.close()
+            raise
 
         changed = False
 
@@ -360,7 +375,7 @@ def run_once():
             pattern = src.get("glob", "**/*.md")
             max_per_run = int(src.get("max_per_run", 1))
 
-            # ▼ Git の「Last commit date」降順で並べ替える（最新優先）
+            # ▼ Git の「Last commit date」降順で並べ替え
             candidates = list(repo_dir.glob(pattern))
             files = sorted(
                 candidates,
