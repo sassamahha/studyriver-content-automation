@@ -2,9 +2,6 @@ name: Post note
 
 on:
   workflow_dispatch: {}
-  schedule:
-    - cron: '45 10 * * *'  # JST 19:45（毎日） ← 18:45の1時間後
-    - cron: '0 0 * * *'    # JST 09:00（毎日） ← 08:00の1時間後
 
 jobs:
   run:
